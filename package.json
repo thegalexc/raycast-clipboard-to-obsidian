@@ -4,7 +4,7 @@
   "title": "Clipboard to Obsidian",
   "description": "Create Obsidian notes from clipboard history",
   "icon": "command-icon.png",
-  "author": "callsen",
+  "author": "Gilman Callsen (GalexC)",
   "categories": [
     "Productivity"
   ],
