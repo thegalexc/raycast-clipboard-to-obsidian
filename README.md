@@ -2,6 +2,10 @@
 
 Create Obsidian notes from your clipboard history with ease.
 
+## PR Description
+
+This Raycast extension streamlines the process of creating Obsidian notes from clipboard content. It automatically captures the last two items from your clipboard history, intelligently using the shorter text as the note title and the longer text as the note content. The extension integrates seamlessly with your existing Obsidian vault structure and opens notes directly in Obsidian after creation.
+
 ## Features
 
 - Automatically creates notes from the last 2 items in your clipboard history
@@ -30,6 +34,7 @@ Create Obsidian notes from your clipboard history with ease.
 
 ```bash
 npm install
+npm run build
 npm run dev
 ```
 

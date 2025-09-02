@@ -1,11 +1,7 @@
-import { showHUD, getPreferenceValues, Clipboard, open, showToast, Toast } from "@raycast/api";
+import { showHUD, getPreferenceValues, Clipboard, open } from "@raycast/api";
+import { showFailureToast } from "@raycast/utils";
 import { promises as fs } from "fs";
 import path from "path";
-
-interface Preferences {
-  vaultPath: string;
-  notesSubfolder: string;
-}
 
 function normalizeFileName(text: string): string {
   return text
@@ -24,7 +20,7 @@ function getToday(): string {
 
 export default async function Command() {
   try {
-    const preferences = getPreferenceValues<Preferences>();
+    const preferences = getPreferenceValues<{ vaultPath: string; notesSubfolder: string }>();
     const vaultPath = preferences.vaultPath.replace(/^~/, process.env.HOME || "");
     const notesDir = path.join(vaultPath, preferences.notesSubfolder || "Notes/Unsorted");
 
@@ -36,18 +32,14 @@ export default async function Command() {
 
     // Check if we have two distinct items
     if (!clip1 || !clip2) {
-      await showToast({
-        style: Toast.Style.Failure,
-        title: "Insufficient clipboard history",
+      await showFailureToast("Insufficient clipboard history", {
         message: "Need at least 2 items in clipboard history",
       });
       return;
     }
 
     if (clip1 === clip2) {
-      await showToast({
-        style: Toast.Style.Failure,
-        title: "Clipboard items are identical",
+      await showFailureToast("Clipboard items are identical", {
         message: "Need 2 different items in clipboard history",
       });
       return;
@@ -73,9 +65,7 @@ export default async function Command() {
     await showHUD(`✅ Note created: ${filename}`);
   } catch (error) {
     console.error("Error creating note:", error);
-    await showToast({
-      style: Toast.Style.Failure,
-      title: "Failed to create note",
+    await showFailureToast("Failed to create note", {
       message: error instanceof Error ? error.message : "Unknown error",
     });
   }

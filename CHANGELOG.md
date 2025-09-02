@@ -1,6 +1,6 @@
 # Clipboard to Obsidian Changelog
 
-## [Initial Version] - 2025-01-02
+## [Initial Version] - {PR_MERGE_DATE}
 
 ### Added
 - Initial release of Clipboard to Obsidian extension
