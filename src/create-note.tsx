@@ -156,12 +156,26 @@ export default async function Command() {
     const vaultPath = preferences.vaultPath.replace(/^~/, process.env.HOME || "");
     const notesDir = path.join(vaultPath, preferences.notesSubfolder || "Notes/Unsorted");
 
-    // Validate vault path exists and is accessible
+    // Validate vault path exists
     try {
       await fs.access(vaultPath);
-    } catch (error) {
-      await showFailureToast("Vault Path Error", {
-        message: `Cannot access Obsidian vault at: ${vaultPath}. Please check the path in preferences.`,
+    } catch {
+      await showFailureToast("Vault path not found", {
+        message: `Cannot access vault at: ${vaultPath}`,
+      });
+      return;
+    }
+
+    await fs.mkdir(notesDir, { recursive: true });
+
+    // Get the last 2 items from clipboard history (offset 0 and 1)
+    const clip1 = await Clipboard.readText({ offset: 0 });
+    const clip2 = await Clipboard.readText({ offset: 1 });
+
+    // Check if we have two distinct items
+    if (!clip1 || !clip2) {
+      await showFailureToast("Insufficient clipboard history", {
+        message: "Need at least 2 items in clipboard history",
       });
       return;
     }
