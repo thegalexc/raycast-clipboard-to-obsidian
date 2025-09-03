@@ -27,6 +27,16 @@ export default async function Command() {
     const vaultPath = preferences.vaultPath.replace(/^~/, process.env.HOME || "");
     const notesDir = path.join(vaultPath, preferences.notesSubfolder || "Notes/Unsorted");
 
+    // Validate vault path exists
+    try {
+      await fs.access(vaultPath);
+    } catch {
+      await showFailureToast("Vault path not found", {
+        message: `Cannot access vault at: ${vaultPath}`,
+      });
+      return;
+    }
+
     await fs.mkdir(notesDir, { recursive: true });
 
     // Get the last 2 items from clipboard history (offset 0 and 1)
