@@ -141,11 +141,36 @@ export default async function Command() {
   try {
     // Get and validate preferences
     const preferences = getPreferenceValues<Preferences>();
+
+    if (!preferences.vaultPath?.trim()) {
+      await showFailureToast("Configuration Error", {
+        message: "Obsidian vault path is not configured. Please set it in preferences.",
+      });
+      return;
+    }
+
     const vaultPath = preferences.vaultPath.replace(/^~/, process.env.HOME || "");
     const notesDir = path.join(vaultPath, preferences.notesSubfolder || "Notes/Unsorted");
 
-    // Ensure the notes directory exists
-    await fs.mkdir(notesDir, { recursive: true });
+    // Validate vault path exists and is accessible
+    try {
+      await fs.access(vaultPath);
+    } catch (error) {
+      await showFailureToast("Vault Path Error", {
+        message: `Cannot access Obsidian vault at: ${vaultPath}. Please check the path in preferences.`,
+      });
+      return;
+    }
+
+    // Ensure the notes directory exists with proper error handling
+    try {
+      await fs.mkdir(notesDir, { recursive: true });
+    } catch (error) {
+      await showFailureToast("Directory Creation Error", {
+        message: `Failed to create notes directory: ${notesDir}. Check file system permissions.`,
+      });
+      return;
+    }
 
     // Retrieve clipboard history
     const clipboardItems = await retrieveClipboardHistory();
@@ -170,8 +195,16 @@ export default async function Command() {
     // Generate unique file path
     const finalPath = await generateUniqueFilePath(originalPath);
 
-    // Create the note
-    await fs.writeFile(finalPath, longer);
+    // Create the note with proper error handling
+    try {
+      await fs.writeFile(finalPath, longer, { encoding: "utf8" });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Unknown file write error";
+      await showFailureToast("File Creation Error", {
+        message: `Failed to create note file: ${errorMessage}`,
+      });
+      return;
+    }
 
     // Open in Obsidian
     await openInObsidian(finalPath);
@@ -179,8 +212,24 @@ export default async function Command() {
     await showHUD(`✅ Note created: ${path.basename(finalPath)}`);
   } catch (error) {
     console.error("Error creating note:", error);
+
+    // More specific error categorization
+    let errorMessage = "An unexpected error occurred";
+    if (error instanceof Error) {
+      errorMessage = error.message;
+
+      // Handle specific error types
+      if (error.message.includes("ENOSPC")) {
+        errorMessage = "Insufficient disk space to create the note";
+      } else if (error.message.includes("EACCES")) {
+        errorMessage = "Permission denied. Check file system permissions.";
+      } else if (error.message.includes("ENAMETOOLONG")) {
+        errorMessage = "Generated filename is too long for the file system";
+      }
+    }
+
     await showFailureToast("Failed to create note", {
-      message: error instanceof Error ? error.message : "An unexpected error occurred",
+      message: errorMessage,
     });
   }
 }
@@ -191,52 +240,76 @@ export default async function Command() {
  * @returns Object containing shorter and longer clipboard content, or null if validation fails
  */
 async function retrieveClipboardHistory(): Promise<{ shorter: string; longer: string } | null> {
-  // Get the last 2 items from clipboard history
-  const clip1 = await Clipboard.readText({ offset: 0 });
-  const clip2 = await Clipboard.readText({ offset: 1 });
+  try {
+    // Get the last 2 items from clipboard history
+    const clip1 = await Clipboard.readText({ offset: 0 });
+    const clip2 = await Clipboard.readText({ offset: 1 });
 
-  // Validate we have enough clipboard items
-  if (!clip1 || !clip2) {
-    await showFailureToast("Insufficient Clipboard History", {
-      message: `Need at least ${MIN_CLIPBOARD_ITEMS} items in clipboard history`,
+    // Validate we have enough clipboard items
+    if (!clip1 || !clip2) {
+      await showFailureToast("Insufficient Clipboard History", {
+        message: `Need at least ${MIN_CLIPBOARD_ITEMS} items in clipboard history. Try copying more content.`,
+      });
+      return null;
+    }
+
+    // Validate each clipboard item
+    const validation1 = validateClipboardContent(clip1);
+    const validation2 = validateClipboardContent(clip2);
+
+    if (!validation1.isValid) {
+      await showFailureToast("Invalid Clipboard Content", {
+        message: `First clipboard item: ${validation1.error}`,
+      });
+      return null;
+    }
+
+    if (!validation2.isValid) {
+      await showFailureToast("Invalid Clipboard Content", {
+        message: `Second clipboard item: ${validation2.error}`,
+      });
+      return null;
+    }
+
+    const trimmedClip1 = clip1.trim();
+    const trimmedClip2 = clip2.trim();
+
+    // Check for identical content
+    if (trimmedClip1 === trimmedClip2) {
+      await showFailureToast("Duplicate Clipboard Content", {
+        message: "The last two clipboard items are identical. Please copy different content.",
+      });
+      return null;
+    }
+
+    // Additional validation: Check if content is reasonable for note creation
+    const minContentLength = 1;
+    const maxTitleLength = 200; // Reasonable title length
+
+    if (trimmedClip1.length < minContentLength || trimmedClip2.length < minContentLength) {
+      await showFailureToast("Content Too Short", {
+        message: "Clipboard content must contain at least some meaningful text.",
+      });
+      return null;
+    }
+
+    // Determine which is shorter for title, longer for content
+    const [shorter, longer] =
+      trimmedClip1.length <= trimmedClip2.length ? [trimmedClip1, trimmedClip2] : [trimmedClip2, trimmedClip1];
+
+    // Warn if title might be too long
+    if (shorter.length > maxTitleLength) {
+      console.warn(`Title content is quite long (${shorter.length} characters). It will be truncated for filename.`);
+    }
+
+    return { shorter, longer };
+  } catch (error) {
+    console.error("Error retrieving clipboard history:", error);
+    await showFailureToast("Clipboard Access Error", {
+      message: "Failed to access clipboard history. Please try again.",
     });
     return null;
   }
-
-  // Validate each clipboard item
-  const validation1 = validateClipboardContent(clip1);
-  const validation2 = validateClipboardContent(clip2);
-
-  if (!validation1.isValid) {
-    await showFailureToast("Invalid Clipboard Content", {
-      message: `First clipboard item: ${validation1.error}`,
-    });
-    return null;
-  }
-
-  if (!validation2.isValid) {
-    await showFailureToast("Invalid Clipboard Content", {
-      message: `Second clipboard item: ${validation2.error}`,
-    });
-    return null;
-  }
-
-  const trimmedClip1 = clip1.trim();
-  const trimmedClip2 = clip2.trim();
-
-  // Check for identical content
-  if (trimmedClip1 === trimmedClip2) {
-    await showFailureToast("Duplicate Clipboard Content", {
-      message: "The last two clipboard items are identical. Please copy different content.",
-    });
-    return null;
-  }
-
-  // Determine which is shorter for title, longer for content
-  const [shorter, longer] =
-    trimmedClip1.length <= trimmedClip2.length ? [trimmedClip1, trimmedClip2] : [trimmedClip2, trimmedClip1];
-
-  return { shorter, longer };
 }
 
 /**
