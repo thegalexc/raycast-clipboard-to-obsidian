@@ -3,6 +3,10 @@ import { showFailureToast } from "@raycast/utils";
 import { promises as fs } from "fs";
 import path from "path";
 
+/**
+ * Configuration constants for the clipboard to Obsidian extension.
+ * These values control various limits and behaviors of the application.
+ */
 // Constants for configuration
 const MAX_CONTENT_LENGTH = 1_000_000; // 1MB limit for clipboard content
 const MAX_FILENAME_LENGTH = 50; // Maximum length for normalized filename
